@@ -67,13 +67,24 @@ trait HasFillableRelations
                 if ($fillableData instanceof Model) {
                     $entity = $fillableData;
                 } else {
-                    $entity = $klass::where($fillableData)->firstOrFail();
+                    // find with all object properties
+                    // $entity = $klass::where($fillableData)->firstOrFail();
+
+
+                    if (is_array($fillableData)) {
+                        // find with all object properties
+                        $entity = $klass::where($fillableData)->firstOrFail();
+                    } else {                            
+                        $entity = $klass::findOrFail($fillableData);
+                    }
+
                 }
                 $relation->associate($entity);
             } elseif ($relation instanceof HasOne) {
                 if ($fillableData instanceof Model) {
                     $entity = $fillableData;
                 } else {
+                    // find or create with all object properties
                     $entity = $klass::firstOrCreate($fillableData);
                 }
                 $qualified_foreign_key = $relation->getForeignKey();
@@ -90,7 +101,16 @@ trait HasFillableRelations
                     if ($row instanceof Model) {
                         $entity = $row;
                     } else {
+                        // find or create with all object properties
                         $entity = new $klass($row);
+                        // if (is_array($row)) {
+                        //     // var_dump($row);
+                        //     // die();
+                        //     // find with all object properties
+                        //     $entity = $klass::where($row)->firstOrFail();
+                        // } else {                            
+                        //     $entity = $klass::findOrFail($row);
+                        // }
                     }
                     $relation->save($entity);
                 }
@@ -103,7 +123,13 @@ trait HasFillableRelations
                     if ($row instanceof Model) {
                         $entity = $row;
                     } else {
-                        $entity = $klass::where($row)->firstOrFail();
+
+                        if (is_array($row)) {
+                            // find with all object properties
+                            $entity = $klass::where($row)->firstOrFail();
+                        } else {                            
+                            $entity = $klass::findOrFail($row);
+                        }
                     }
                     $relation->attach($entity);
                 }
