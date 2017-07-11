@@ -1,3 +1,4 @@
+<?php
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -96,3 +97,4 @@ class HasManySyncable extends HasMany
         return is_numeric($key) ? (int) $key : (string) $key;
     }
 }
+?>
