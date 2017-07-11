@@ -69,14 +69,13 @@ trait HasFillableRelations
             $camelCaseName = camel_case($relationName);
             $relation = $this->{$camelCaseName}();
             $klass = get_class($relation->getRelated());
+            
+            // BelongsTo : ASSOCIATE
             if ($relation instanceof BelongsTo) {
+                
                 if ($fillableData instanceof Model) {
                     $entity = $fillableData;
                 } else {
-                    // find with all object properties
-                    // $entity = $klass::where($fillableData)->firstOrFail();
-
-
                     if (is_array($fillableData)) {
                         // find with all object properties
                         $entity = $klass::where($fillableData)->firstOrFail();
@@ -86,11 +85,13 @@ trait HasFillableRelations
 
                 }
                 $relation->associate($entity);
+            
+            // HasOne : UPDATE OR CREATE NEW
             } elseif ($relation instanceof HasOne) {
+                
                 if ($fillableData instanceof Model) {
                     $entity = $fillableData;
                 } else {
-                    // find or create with all object properties
                     $entity = $klass::firstOrCreate($fillableData);
                 }
                 $qualified_foreign_key = $relation->getForeignKey();
@@ -98,6 +99,8 @@ trait HasFillableRelations
                 $qualified_local_key_name = $relation->getQualifiedParentKeyName();
                 list($table, $local_key) = explode('.', $qualified_local_key_name);
                 $this->{$local_key} = $entity->{$foreign_key};
+            
+            // HasMany : UPDATE OR CREATE NEW
             } elseif ($relation instanceof HasMany) {
                 if (!$this->exists) {
                     $this->save();
@@ -105,6 +108,7 @@ trait HasFillableRelations
                 
                 $relation->sync($fillableData);
 
+            // BelongsToMany : ATTACH & DETACH
             } elseif ($relation instanceof BelongsToMany) {
                 if (!$this->exists) {
                     $this->save();
