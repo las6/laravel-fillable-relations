@@ -113,15 +113,21 @@ trait HasFillableRelations
                 if (!$this->exists) {
                     $this->save();
                 }
+
                 $relation->detach();
+                $primaryKey = (new $klass)->getKeyName();
+
                 foreach ($fillableData as $row) {
                     if ($row instanceof Model) {
                         $entity = $row;
-                    } else {
+                    } else {                      
 
-                        if (is_array($row)) {
-                            // find with all object properties
-                            $entity = $klass::where($row)->firstOrFail();
+                        if (is_array($row) && !empty($row[$primaryKey])) {
+                            // ~find with all object properties~
+                            // ~find with just the primary key
+
+                            // $entity = $klass::where($row)->firstOrFail();
+                            $entity = $klass::findOrFail($row[$primaryKey]);
                         } else {                            
                             $entity = $klass::findOrFail($row);
                         }
