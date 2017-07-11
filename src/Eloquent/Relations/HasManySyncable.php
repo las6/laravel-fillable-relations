@@ -1,6 +1,7 @@
 <?php
-use Illuminate\Database\Eloquent\Relations\HasMany;
+namespace LaravelFillableRelations\Eloquent\Relations;
 
+use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @link https://github.com/laravel/framework/blob/5.4/src/Illuminate/Database/Eloquent/Relations/HasMany.php
  */
@@ -8,6 +9,7 @@ class HasManySyncable extends HasMany
 {
     public function sync($data, $deleting = true)
     {
+        
         $changes = [
             'created' => [], 'deleted' => [], 'updated' => [],
         ];

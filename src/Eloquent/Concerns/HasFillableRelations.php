@@ -102,41 +102,8 @@ trait HasFillableRelations
                 if (!$this->exists) {
                     $this->save();
                 }
-                                        
                 
-                $entities = [];
-                foreach ($fillableData as $row) {
-                    if ($row instanceof Model) {
-                        $entities[] = $row;
-                        // $relation->save($entity);
-                    } else {
-                        // $entity = new $klass($row);
-                        $entity = false;
-                        if (is_array($row)) {
-                            if (!empty($row['id'])) {
-                            
-                                if ($entity = $klass::findOrFail($row['id'])) {
-                                    // $entity->update($row);
-                                    $entities[] = $entity;
-                                }
-
-                            } 
-                            // if (empty($entity)) {
-                            //     $relation->create($row);
-                            // }
-                        } else {                            
-                            $entities[] = $klass::findOrFail($row);
-                            // $relation->save($entity);
-                        }
-                    }
-                }
-
-                var_dump($entities,'ughj');
-                $relation->saveMany($entities);
-                die();
-                $relation->delete();
-
-                // $relation->delete();
+                $relation->sync($fillableData);
 
             } elseif ($relation instanceof BelongsToMany) {
                 if (!$this->exists) {
