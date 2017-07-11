@@ -59,6 +59,12 @@ trait HasFillableRelations
 
     public function fillRelations(array $fillableRelationsData)
     {
+
+        // global $dirtttty;
+        // $dirtttty++;
+        // var_dump($fillableRelationsData,$dirtttty);
+        // if ($dirtttty>6) die();
+        
         foreach ($fillableRelationsData as $relationName => $fillableData) {
             $camelCaseName = camel_case($relationName);
             $relation = $this->{$camelCaseName}();
@@ -96,24 +102,42 @@ trait HasFillableRelations
                 if (!$this->exists) {
                     $this->save();
                 }
-                $relation->delete();
+                                        
+                
+                $entities = [];
                 foreach ($fillableData as $row) {
                     if ($row instanceof Model) {
-                        $entity = $row;
+                        $entities[] = $row;
+                        // $relation->save($entity);
                     } else {
-                        // find or create with all object properties
-                        $entity = new $klass($row);
-                        // if (is_array($row)) {
-                        //     // var_dump($row);
-                        //     // die();
-                        //     // find with all object properties
-                        //     $entity = $klass::where($row)->firstOrFail();
-                        // } else {                            
-                        //     $entity = $klass::findOrFail($row);
-                        // }
+                        // $entity = new $klass($row);
+                        $entity = false;
+                        if (is_array($row)) {
+                            if (!empty($row['id'])) {
+                            
+                                if ($entity = $klass::findOrFail($row['id'])) {
+                                    // $entity->update($row);
+                                    $entities[] = $entity;
+                                }
+
+                            } 
+                            // if (empty($entity)) {
+                            //     $relation->create($row);
+                            // }
+                        } else {                            
+                            $entities[] = $klass::findOrFail($row);
+                            // $relation->save($entity);
+                        }
                     }
-                    $relation->save($entity);
                 }
+
+                var_dump($entities,'ughj');
+                $relation->saveMany($entities);
+                die();
+                $relation->delete();
+
+                // $relation->delete();
+
             } elseif ($relation instanceof BelongsToMany) {
                 if (!$this->exists) {
                     $this->save();
@@ -143,7 +167,8 @@ trait HasFillableRelations
     {
         list($fillableRelationsData, $attributes) = $this->extractFillableRelations($attributes);
         parent::fill($attributes);
-        $this->fillRelations($fillableRelationsData);
+        $this->fillRelations($fillableRelationsData);        
+
         return $this;
     }
 
