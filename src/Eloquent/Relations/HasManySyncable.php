@@ -9,6 +9,7 @@ class HasManySyncable extends HasMany
 {
     public function sync($data, $deleting = true)
     {
+
         
         $changes = [
             'created' => [], 'deleted' => [], 'updated' => [],
@@ -29,11 +30,20 @@ class HasManySyncable extends HasMany
         foreach ($data as $row) {
             // We determine "updateable" rows as those whose $relatedKeyName (usually 'id') is set, not empty, and
             // match a related row in the database.
+
+            if (!empty($row)) {
+                if (!is_array($row)) {
+                    $row = [ $relatedKeyName => $row ];
+                }
+            }
+
             if (isset($row[$relatedKeyName]) && !empty($row[$relatedKeyName]) && in_array($row[$relatedKeyName], $current)) {
                 $id = $row[$relatedKeyName];
                 $updateRows[$id] = $row;
             } else {
-                $newRows[] = $row;
+                if (!empty($row) || is_array($row)) {
+                    $newRows[] = $row;
+                }
             }
         }
 
@@ -47,17 +57,16 @@ class HasManySyncable extends HasMany
             }
         }
 
-        // Delete any non-matching rows
-        if ($deleting && count($deleteIds) > 0) {
-            $this->getRelated()->destroy($deleteIds);
-
-            $changes['deleted'] = $this->castKeys($deleteIds);
-        }
 
         // Update the updatable rows
         foreach ($updateRows as $id => $row) {
-            $this->getRelated()->where($relatedKeyName, $id)
-                 ->update($row);
+            // $this->getRelated()->where($relatedKeyName, $id)->update($row);
+            $tmp = $this->getRelated()->where($relatedKeyName, $id)->get();
+            if (!empty($tmp)) {
+                foreach ($tmp as $key => $value) {
+                    $value->update($row);
+                }                
+            }
         }
         
         $changes['updated'] = $this->castKeys($updateIds);
@@ -71,6 +80,13 @@ class HasManySyncable extends HasMany
 
         $changes['created'][] = $this->castKeys($newIds);
 
+        // Do deletion last, as if create fails, we don't want to run this. (maybe transaction would be better?)
+        // Delete any non-matching rows
+        if ($deleting && count($deleteIds) > 0) {
+            $this->getRelated()->destroy($deleteIds);
+
+            $changes['deleted'] = $this->castKeys($deleteIds);
+        }
         return $changes;
     }
 

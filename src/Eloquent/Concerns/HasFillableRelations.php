@@ -45,43 +45,66 @@ trait HasFillableRelations
         return isset($this->fillable_relations) ? $this->fillable_relations : [];
     }
 
-    public function extractFillableRelations(array $attributes)
+    public function extractFillableNestedRelations($model, array $attributes)
     {
+
         $fillableRelationsData = [];
-        foreach ($this->fillableRelations() as $relationName) {
+        foreach ($model->fillableRelations() as $relationName) {
             $val = array_pull($attributes, $relationName);
-            if ($val) {
+
+            //allows empty arrays!
+            if (!empty($val) || is_array($val)) {
                 $fillableRelationsData[$relationName] = $val;
             }
         }
         return [$fillableRelationsData, $attributes];
     }
 
-    public function fillRelations(array $fillableRelationsData)
+    public function extractFillableRelations(array $attributes)
     {
 
-        // global $dirtttty;
-        // $dirtttty++;
-        // var_dump($fillableRelationsData,$dirtttty);
-        // if ($dirtttty>6) die();
+        $fillableRelationsData = [];
+        foreach ($this->fillableRelations() as $relationName) {
+            $val = array_pull($attributes, $relationName);
+
+            //allows empty arrays!
+            if (!empty($val) || is_array($val)) {
+                $fillableRelationsData[$relationName] = $val;
+            }
+        }
+        return [$fillableRelationsData, $attributes];
+    }
+
+    public function fillRelations( array $fillableRelationsData, $depth = 1)
+    {
+
+
         
         foreach ($fillableRelationsData as $relationName => $fillableData) {
+
+
             $camelCaseName = camel_case($relationName);
             $relation = $this->{$camelCaseName}();
             $klass = get_class($relation->getRelated());
             
+            
+            
             // BelongsTo : ASSOCIATE
             if ($relation instanceof BelongsTo) {
                 
+                $primaryKey = (new $klass)->getKeyName();
+
                 if ($fillableData instanceof Model) {
                     $entity = $fillableData;
                 } else {
                     if (is_array($fillableData)) {
                         // find with all object properties
-                        $entity = $klass::where($fillableData)->firstOrFail();
+                        // $entity = $klass::where($fillableData)->firstOrFail();
+                        $entity = $klass::findOrFail($fillableData[$primaryKey]);
                     } else {                            
                         $entity = $klass::findOrFail($fillableData);
                     }
+                    // var_dump($fillableData[$primaryKey], $entity);
 
                 }
                 $relation->associate($entity);
@@ -94,7 +117,9 @@ trait HasFillableRelations
                 } else {
                     $entity = $klass::firstOrCreate($fillableData);
                 }
+
                 $qualified_foreign_key = $relation->getForeignKey();
+                // $qualified_foreign_key = $klass::getForeignKey();
                 list($table, $foreign_key) = explode('.', $qualified_foreign_key);
                 $qualified_local_key_name = $relation->getQualifiedParentKeyName();
                 list($table, $local_key) = explode('.', $qualified_local_key_name);
@@ -104,50 +129,115 @@ trait HasFillableRelations
             } elseif ($relation instanceof HasMany) {
                 if (!$this->exists) {
                     $this->save();
+                }                   
+
+                $straight_data = [];
+                $relation_data = [];
+
+                $primaryKey = (new $klass)->getKeyName();
+
+                //separate normal fields, sync them.
+                foreach ($fillableData as $key => $value) {
+
+                    $model = new $klass;
+                    list($fillableNestedRelationsData, $attributes) = $this->extractFillableNestedRelations($model,$value);
+                    $straight_data[] = $attributes;
+                    $relation_data[] = $fillableNestedRelationsData;
                 }
+
+                //Update & Sync the straight data
+                $relation->sync($straight_data);
+
+                foreach ($fillableData as $key => $value) {
+                    $model = $klass::find($value[$primaryKey]);
+                    if (!$model) {
+                       $model = $klass::newModelInstance();
+                    }
+
+                    list($fillableNestedRelationsData, $attributes) = $this->extractFillableNestedRelations($model,$value);
+
+                    if (!empty($fillableNestedRelationsData)) {
+
+                        $model->fill($value);
+                        if (!empty($value[$primaryKey])) {
+                            $model->fillRelations($fillableNestedRelationsData, $depth+1);  
+                        }
+                    }
+                }
+
                 
-                $relation->sync($fillableData);
 
             // BelongsToMany : ATTACH & DETACH
+            // note: does not allow duplicates!
             } elseif ($relation instanceof BelongsToMany) {
                 if (!$this->exists) {
                     $this->save();
                 }
 
-                $relation->detach();
                 $primaryKey = (new $klass)->getKeyName();
+                $allowDeepModification = (new $klass)->allowDeepModification;
+                $newData = [];
 
-                foreach ($fillableData as $row) {
+                foreach ($fillableData as $key => $row) {
                     if ($row instanceof Model) {
                         $entity = $row;
                     } else {                      
 
-                        if (is_array($row) && !empty($row[$primaryKey])) {
-                            // ~find with all object properties~
-                            // ~find with just the primary key
-
-                            // $entity = $klass::where($row)->firstOrFail();
-                            $entity = $klass::findOrFail($row[$primaryKey]);
-                        } else {                            
+                        if (is_integer($row)) {
                             $entity = $klass::findOrFail($row);
+                        } else {
+                            if ( !empty($row[$primaryKey]) ) {                            
+                                $entity = $klass::findOrFail($row[$primaryKey]);
+                                if ($allowDeepModification) {
+                                    $entity->fill($row);
+                                    $entity->save();
+                                }
+                            } else {                 
+                                if ($allowDeepModification) {
+                                    $entity = $klass::newModelInstance();
+                                    $entity->fill($row);
+                                    $entity->save();
+                                }
+                            }
+                        }
+
+                    }
+                                        
+                    if (!empty($row['pivot'])) { 
+                        $newData[ $entity->$primaryKey ] = $row['pivot'];  
+                    } else {
+                        if (!empty($entity)) {
+                            $newData[ $entity->$primaryKey ] = [];
                         }
                     }
-                    $relation->attach($entity);
+                    // $newData[] = $entity->$primaryKey;
                 }
+
+                //sync relations from the data (delete, add, update)
+                $relation->sync($newData);
+
             } else {
                 throw new RuntimeException("Unknown or unfillable relation type $relationName");
             }
         }
     }
 
-    public function fill(array $attributes)
+    public function fillWithRelations(array $attributes)
     {
+        //data,
+            //filter out relations
+            //save
+            //save relations -->
+                // filter out subrelations
+                //save
+
         list($fillableRelationsData, $attributes) = $this->extractFillableRelations($attributes);
         parent::fill($attributes);
-        $this->fillRelations($fillableRelationsData);        
+        $this->fillRelations($fillableRelationsData);  
 
         return $this;
     }
+
 
     public static function create(array $attributes = [])
     {
